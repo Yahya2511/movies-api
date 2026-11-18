@@ -2,6 +2,7 @@ const User = require("./user");
 const Movie = require("./movie");
 const Rating = require("./rating");
 const Playlist = require("./playlist");
+const Genre = require("./genre");
 
 // User and Rating
 User.hasMany(Rating, { onDelete: "CASCADE" });
@@ -19,4 +20,7 @@ Playlist.belongsTo(User, { onDelete: "CASCADE" });
 Playlist.belongsToMany(Movie, { through: "PlaylistMovie" });
 Movie.belongsToMany(Playlist, { through: "PlaylistMovie" });
 
-module.exports = { User, Movie, Rating, Playlist };
+Movie.belongsToMany(Genre, { through: "MovieGenre" });
+Genre.belongsToMany(Movie, { through: "MovieGenre" });
+
+module.exports = { User, Movie, Rating, Playlist, Genre };

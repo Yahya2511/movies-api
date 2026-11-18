@@ -1,6 +1,6 @@
 const { Op, Sequelize } = require("sequelize");
 
-const { Movie, Rating } = require("../models");
+const { Movie, Genre } = require("../models");
 
 const withAverage = {
 	attributes: {
@@ -35,6 +35,15 @@ exports.getAllMovies = async (req, res) => {
 		where.director = { [Op.iLike]: `%${director}%` };
 	}
 
+	const genreId = parseInt(req.query.genre);
+	if (genreId) {
+		where.id = {
+			[Op.in]: Sequelize.literal(
+				`(SELECT "MovieId" FROM "MovieGenre" WHERE "GenreId" = ${genreId})`,
+			),
+		};
+	}
+
 	const { rows, count } = await Movie.findAndCountAll({
 		where,
 		...withAverage,
@@ -53,7 +62,10 @@ exports.getAllMovies = async (req, res) => {
 };
 
 exports.getMovieById = async (req, res) => {
-	const movie = await Movie.findByPk(req.params.id, withAverage);
+	const movie = await Movie.findByPk(req.params.id, {
+		...withAverage,
+		include: { model: Genre, through: { attributes: [] } },
+	});
 
 	if (!movie) {
 		return res.status(404).json({ message: "Movie not found" });

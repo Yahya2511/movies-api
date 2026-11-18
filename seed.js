@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const sequelize = require("./config/db");
-const { User, Movie, Rating, Playlist } = require("./models");
+const { User, Movie, Rating, Playlist, Genre } = require("./models");
 
 const MOVIE_COUNT = 40; // TMDB returns 20 per page
 
@@ -33,6 +33,7 @@ async function importMovies() {
 		lengthMin: d.runtime || null,
 		director: d.credits.crew.find((p) => p.job === "Director")?.name || null,
 		description: d.overview || null,
+		genres: d.genres.map((g) => g.name),
 		posterUrl: d.poster_path
 			? `https://image.tmdb.org/t/p/w500${d.poster_path}`
 			: null,
@@ -75,6 +76,15 @@ async function seed() {
 
 		// movies
 		const movies = await Movie.bulkCreate(movieData);
+
+		// genres
+		const genreNames = [...new Set(movieData.flatMap((m) => m.genres))];
+		const genres = await Genre.bulkCreate(genreNames.map((name) => ({ name })));
+		const genreByName = Object.fromEntries(genres.map((g) => [g.name, g]));
+
+		for (let i = 0; i < movies.length; i++) {
+			await movies[i].setGenres(movieData[i].genres.map((n) => genreByName[n]));
+		}
 
 		// random ratings: each user rates 15 different movies
 		const comments = [

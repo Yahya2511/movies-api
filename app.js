@@ -18,6 +18,7 @@ app.use("/auth", require("./routes/auth"));
 app.use("/movies", require("./routes/movies"));
 app.use("/users", require("./routes/users"));
 app.use("/playlists", require("./routes/playlists"));
+app.use("/genres", require("./routes/genres"));
 
 app.use((req, res) => {
 	res.status(404).json({ message: "Route not found" });
