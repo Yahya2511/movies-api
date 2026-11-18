@@ -15,16 +15,41 @@ const withAverage = {
 	},
 };
 
-exports.getAllMovies = async (req, res) => {
-	const { name } = req.query;
-	const where = {};
+const sortOptions = {
+	name: [["name", "ASC"]],
+	newest: [["id", "DESC"]],
+	length: [["lengthMin", "ASC"]],
+	rating: [[Sequelize.literal('"averageRating"'), "DESC NULLS LAST"]],
+};
 
+exports.getAllMovies = async (req, res) => {
+	const { name, director, sort } = req.query;
+	const page = Math.max(parseInt(req.query.page) || 1, 1);
+	const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 5);
+
+	const where = {};
 	if (name) {
 		where.name = { [Op.iLike]: `%${name}%` };
 	}
+	if (director) {
+		where.director = { [Op.iLike]: `%${director}%` };
+	}
 
-	const movies = await Movie.findAll({ where, ...withAverage });
-	res.json(movies);
+	const { rows, count } = await Movie.findAndCountAll({
+		where,
+		...withAverage,
+		order: sortOptions[sort] || [["id", "ASC"]],
+		limit,
+		offset: (page - 1) * limit,
+	});
+
+	res.json({
+		data: rows,
+		page,
+		limit,
+		total: count,
+		totalPages: Math.ceil(count / limit),
+	});
 };
 
 exports.getMovieById = async (req, res) => {
