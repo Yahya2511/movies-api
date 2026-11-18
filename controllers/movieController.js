@@ -1,8 +1,21 @@
-const { Op } = require("sequelize");
+const { Op, Sequelize } = require("sequelize");
 
-const { Movie } = require("../models");
+const { Movie, Rating } = require("../models");
 
-exports.getAllMovies = async (req, res, next) => {
+const withAverage = {
+	attributes: {
+		include: [
+			[
+				Sequelize.literal(
+					`(SELECT ROUND(AVG("rate"), 1) FROM "Ratings" WHERE "Ratings"."MovieId" = "Movie"."id")`,
+				),
+				"averageRating",
+			],
+		],
+	},
+};
+
+exports.getAllMovies = async (req, res) => {
 	const { name } = req.query;
 	const where = {};
 
@@ -10,12 +23,12 @@ exports.getAllMovies = async (req, res, next) => {
 		where.name = { [Op.iLike]: `%${name}%` };
 	}
 
-	const movies = await Movie.findAll({ where });
+	const movies = await Movie.findAll({ where, ...withAverage });
 	res.json(movies);
 };
 
-exports.getMovieById = async (req, res, next) => {
-	const movie = await Movie.findByPk(req.params.id);
+exports.getMovieById = async (req, res) => {
+	const movie = await Movie.findByPk(req.params.id, withAverage);
 
 	if (!movie) {
 		return res.status(404).json({ message: "Movie not found" });
