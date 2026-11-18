@@ -5,6 +5,7 @@ exports.createMovieSchema = z.object({
 	lengthMin: z.number().int().positive().optional(),
 	director: z.string().trim().optional(),
 	description: z.string().trim().optional(),
+	posterUrl: z.string().trim().url("Invalid URL").optional(),
 });
 
 exports.updateMovieSchema = exports.createMovieSchema.partial();

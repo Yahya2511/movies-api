@@ -2,118 +2,115 @@ const bcrypt = require("bcrypt");
 const sequelize = require("./config/db");
 const { User, Movie, Rating, Playlist } = require("./models");
 
-const movies = [
-	{
-		name: "Inception",
-		lengthMin: 148,
-		director: "Christopher Nolan",
-		description: "A thief enters people's dreams to steal secrets.",
-	},
-	{
-		name: "The Godfather",
-		lengthMin: 175,
-		director: "Francis Ford Coppola",
-		description: "The aging head of a crime family hands control to his son.",
-	},
-	{
-		name: "The Dark Knight",
-		lengthMin: 152,
-		director: "Christopher Nolan",
-		description: "Batman faces the Joker in Gotham City.",
-	},
-	{
-		name: "Pulp Fiction",
-		lengthMin: 154,
-		director: "Quentin Tarantino",
-		description: "Several crime stories in Los Angeles intertwine.",
-	},
-	{
-		name: "Spirited Away",
-		lengthMin: 125,
-		director: "Hayao Miyazaki",
-		description: "A girl enters a world of spirits to save her parents.",
-	},
-	{
-		name: "Parasite",
-		lengthMin: 132,
-		director: "Bong Joon-ho",
-		description: "A poor family slowly infiltrates a wealthy household.",
-	},
-	{
-		name: "Interstellar",
-		lengthMin: 169,
-		director: "Christopher Nolan",
-		description: "Astronauts travel through a wormhole to save humanity.",
-	},
-	{
-		name: "The Matrix",
-		lengthMin: 136,
-		director: "The Wachowskis",
-		description: "A hacker discovers reality is a simulation.",
-	},
-	{
-		name: "Forrest Gump",
-		lengthMin: 142,
-		director: "Robert Zemeckis",
-		description: "A kind man lives through decades of American history.",
-	},
-	{
-		name: "Gladiator",
-		lengthMin: 155,
-		director: "Ridley Scott",
-		description: "A betrayed Roman general seeks revenge as a gladiator.",
-	},
-];
+const MOVIE_COUNT = 40; // TMDB returns 20 per page
+
+async function tmdb(path) {
+	const res = await fetch(`https://api.themoviedb.org/3${path}`, {
+		headers: { Authorization: `Bearer ${process.env.TMDB_TOKEN}` },
+	});
+	if (!res.ok) throw new Error(`TMDB error ${res.status} on ${path}`);
+	return res.json();
+}
+
+async function importMovies() {
+	// 1. get the ids of the top rated movies
+	const ids = [];
+	for (let page = 1; ids.length < MOVIE_COUNT; page++) {
+		const list = await tmdb(`/movie/top_rated?page=${page}`);
+		ids.push(...list.results.map((m) => m.id));
+	}
+
+	// 2. get the details of each one (runtime, director, ...)
+	const details = await Promise.all(
+		ids
+			.slice(0, MOVIE_COUNT)
+			.map((id) => tmdb(`/movie/${id}?append_to_response=credits`)),
+	);
+
+	// 3. convert to your Movie shape
+	return details.map((d) => ({
+		name: d.title,
+		lengthMin: d.runtime || null,
+		director: d.credits.crew.find((p) => p.job === "Director")?.name || null,
+		description: d.overview || null,
+		posterUrl: d.poster_path
+			? `https://image.tmdb.org/t/p/w500${d.poster_path}`
+			: null,
+	}));
+}
+
+// random whole number from min to max
+const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 async function seed() {
 	try {
-		// 1. delete all old data: drops every table and creates it again (ids restart at 1)
+		if (!process.env.TMDB_TOKEN) {
+			throw new Error("TMDB_TOKEN is missing in .env");
+		}
+
+		console.log("Downloading movies from TMDB...");
+		const movieData = await importMovies();
+
 		await sequelize.sync({ force: true });
 		console.log("Old data deleted, tables recreated.");
 
-		// 2. users
+		// users (kept)
+		const hash = (p) => bcrypt.hash(p, 10);
 		const admin = await User.create({
 			name: "Admin",
 			email: "admin@mail.com",
-			passwordHash: await bcrypt.hash("admin123", 10),
+			passwordHash: await hash("admin123"),
 			role: "admin",
 		});
-		const bob = await User.create({
-			name: "Bob",
-			email: "bob@mail.com",
-			passwordHash: await bcrypt.hash("123456", 10),
-		});
+		const normalUsers = [];
+		for (const name of ["Bob", "Sara", "Omar", "Lina"]) {
+			normalUsers.push(
+				await User.create({
+					name,
+					email: `${name.toLowerCase()}@mail.com`,
+					passwordHash: await hash("123456"),
+				}),
+			);
+		}
 
-		// 3. movies
-		const createdMovies = await Movie.bulkCreate(movies);
+		// movies
+		const movies = await Movie.bulkCreate(movieData);
 
-		// 4. ratings (one per user per movie)
-		await Rating.bulkCreate([
-			{
-				UserId: bob.id,
-				MovieId: createdMovies[0].id,
-				rate: 9,
-				comment: "Mind-bending, loved it.",
-			},
-			{
-				UserId: bob.id,
-				MovieId: createdMovies[1].id,
-				rate: 10,
-				comment: "A masterpiece.",
-			},
-			{ UserId: admin.id, MovieId: createdMovies[0].id, rate: 8 },
-		]);
+		// random ratings: each user rates 15 different movies
+		const comments = [
+			null,
+			null,
+			"Loved it.",
+			"A classic.",
+			"Worth watching twice.",
+			"Great story.",
+		];
+		const ratings = [];
+		for (const user of [admin, ...normalUsers]) {
+			const picked = [...movies].sort(() => Math.random() - 0.5).slice(0, 15);
+			for (const movie of picked) {
+				ratings.push({
+					UserId: user.id,
+					MovieId: movie.id,
+					rate: random(6, 10),
+					comment: comments[random(0, comments.length - 1)],
+				});
+			}
+		}
+		await Rating.bulkCreate(ratings);
 
-		// 5. a playlist for Bob
-		const playlist = await Playlist.create({
+		// one playlist for Bob
+		const favorites = await Playlist.create({
 			name: "Favorites",
-			UserId: bob.id,
+			UserId: normalUsers[0].id,
 		});
-		await playlist.addMovies([createdMovies[0], createdMovies[1]]);
+		await favorites.addMovies(movies.slice(0, 3));
 
-		console.log("Seed done.");
-		console.log("Admin login: admin@mail.com / admin123");
-		console.log("User login:  bob@mail.com / 123456");
+		console.log(
+			`Seed done: ${movies.length} movies, ${ratings.length} ratings.`,
+		);
+		console.log("Admin: admin@mail.com / admin123");
+		console.log("Users: bob, sara, omar, lina @mail.com / 123456");
 	} catch (error) {
 		console.error("Seeding failed:", error.message);
 	} finally {

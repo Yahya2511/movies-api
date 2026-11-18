@@ -25,7 +25,7 @@ const sortOptions = {
 exports.getAllMovies = async (req, res) => {
 	const { name, director, sort } = req.query;
 	const page = Math.max(parseInt(req.query.page) || 1, 1);
-	const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 5);
+	const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 10);
 
 	const where = {};
 	if (name) {

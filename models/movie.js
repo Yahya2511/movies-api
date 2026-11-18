@@ -10,6 +10,10 @@ const Movie = sequelize.define("Movie", {
 	lengthMin: DataTypes.INTEGER,
 	director: DataTypes.STRING,
 	description: DataTypes.TEXT,
+	posterUrl: {
+		type: DataTypes.STRING,
+		validate: { isUrl: true },
+	},
 });
 
-module.exports = Movie
+module.exports = Movie;
