@@ -6,10 +6,17 @@ const { registerSchema, loginSchema } = require("../validators/authValidator");
 
 const { requireLogin } = require("../middleware/auth");
 
+const { loginLimiter } = require("../middleware/rateLimit");
+
 const router = express.Router();
 
 router.post("/register", validate(registerSchema), authController.register);
-router.post("/login", validate(loginSchema), authController.login);
+router.post(
+	"/login",
+	validate(loginSchema),
+	loginLimiter,
+	authController.login,
+);
 
 router.get("/me", requireLogin, authController.me);
 
