@@ -59,3 +59,37 @@ exports.me = async (req, res) => {
 
 	res.json(user);
 };
+
+// PUT /auth/me
+exports.updateMe = async (req, res) => {
+	const user = await User.findByPk(req.user.id);
+	if (!user) {
+		return res.status(404).json({ message: "User not found" });
+	}
+
+	await user.update({ name: req.body.name });
+	res.json({
+		id: user.id,
+		name: user.name,
+		email: user.email,
+		role: user.role,
+	});
+};
+
+// PUT /auth/me/password
+exports.changePassword = async (req, res) => {
+	const { currentPassword, newPassword } = req.body;
+
+	const user = await User.findByPk(req.user.id);
+	if (!user) {
+		return res.status(404).json({ message: "User not found" });
+	}
+
+	const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+	if (!ok) {
+		return res.status(400).json({ message: "Current password is wrong" });
+	}
+
+	await user.update({ passwordHash: await bcrypt.hash(newPassword, 10) });
+	res.status(204).send();
+};
